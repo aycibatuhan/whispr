@@ -14,7 +14,7 @@ impl Default for PostProcessSettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            model: "gemma4:e4b".to_string(),
+            model: "gemma4:e4b-mlx".to_string(),
             system_prompt: "You are a post-processor for speech-to-text output. \
 Fix transcription errors: spelling, spacing, misheard words, missing punctuation. \
 Remove filler words (um, uh, like, you know). \

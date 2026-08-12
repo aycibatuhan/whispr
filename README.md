@@ -69,11 +69,11 @@ Whispr is highly configurable through its settings:
   - Toggle in the tray menu: **Post-Processing → Enable Post-Processing**
   - Pick any installed Ollama model from the tray menu (list is loaded at app launch)
   - Falls back to raw transcription if Ollama is unreachable or times out
-  - Post-processing verified with `gemma4:e4b` in 8 languages: English, Turkish, German, Spanish, French, Italian, Portuguese, Dutch
+  - Post-processing verified with `gemma4:e4b-mlx` in 8 languages: English, Turkish, German, Spanish, French, Italian, Portuguese, Dutch
 
 ## Getting Started
 
-1. Install [Ollama](https://ollama.com) and pull a correction model: `ollama pull gemma4:e4b`
+1. Install [Ollama](https://ollama.com) and pull a correction model: `ollama pull gemma4:e4b-mlx`
 2. Download a multilingual Whisper model to `~/.whispr/model.bin`:
    ```bash
    mkdir -p ~/.whispr && curl -L -o ~/.whispr/model.bin \
@@ -124,7 +124,7 @@ The advanced configuration for Whispr is located in `~/.whispr/settings.json`. B
   },
   "postprocess": {
     "enabled": true,
-    "model": "gemma4:e4b",
+    "model": "gemma4:e4b-mlx",
     "system_prompt": "You are a post-processor for speech-to-text output. Fix transcription errors: spelling, spacing, misheard words, missing punctuation. Remove filler words (um, uh, like, you know). Keep the original language and meaning. Return only the corrected text with no explanations, no quotes, no preamble.",
     "timeout_secs": 30
   },
