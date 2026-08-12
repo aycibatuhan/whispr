@@ -11,7 +11,7 @@
     "clippy": "cd src-tauri && cargo clippy"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.2.0",
+    "@tauri-apps/api": "2.11.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
