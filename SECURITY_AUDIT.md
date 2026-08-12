@@ -68,11 +68,11 @@
 - Minor: `Info.plist` has placeholder text "Your reasons here." for mic usage description (cosmetic, not security).
 - Minor: `unsafe impl Send/Sync for AudioManager` (audio.rs:62-63) — common pattern for cpal wrappers, not a vulnerability.
 
-## 8. Verdict: **SAFE** ✅ (primary) / **CAUTION** (independent subagent review)
+## 8. Verdict: **SAFE** ✅ (primary) / **CAUTION** (independent review)
 
 **Primary audit (this report): SAFE** — No data exfiltration, no credential handling, no exploitable code execution, no suspicious dependencies, filesystem access confined to its own directory. The app does exactly what the README claims: local push-to-talk transcription.
 
-**Independent subagent review: CAUTION** — no UNSAFE findings. Confirmed: no non-local transmission of audio/text/config/logs, no credential harvesting, no user-controlled command execution. Downgraded to CAUTION for these privacy-hygiene items (not vulnerabilities):
+**Independent review: CAUTION** — no UNSAFE findings. Confirmed: no non-local transmission of audio/text/config/logs, no credential harvesting, no user-controlled command execution. Downgraded to CAUTION for these privacy-hygiene items (not vulnerabilities):
 
 1. **Full transcriptions logged to disk by default** — `logging.rs` writes all log records (including the transcription text at main.rs:217-227 and whisper.rs:58-68) to `~/.whispr/logs/whispr_YYYYMMDD.log` when `developer.logging` is true (default).
 2. **Recordings optionally persisted** — `save_recordings` writes raw WAV to `~/.whispr/recordings/` when enabled (default: off). Note: the `recordings_dir` config field exists but is unused — the path is hardcoded to `config_dir/recordings` (audio.rs:152-153), a minor upstream bug.

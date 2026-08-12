@@ -69,7 +69,7 @@ Whispr is highly configurable through its settings:
   - Toggle in the tray menu: **Post-Processing → Enable Post-Processing**
   - Pick any installed Ollama model from the tray menu (list is loaded at app launch)
   - Falls back to raw transcription if Ollama is unreachable or times out
-  - Verified in 8 languages: English, Turkish, German, Spanish, French, Italian, Portuguese, Dutch
+  - Post-processing verified with `gemma4:e4b` in 8 languages: English, Turkish, German, Spanish, French, Italian, Portuguese, Dutch
 
 ## Getting Started
 
@@ -117,7 +117,7 @@ The advanced configuration for Whispr is located in `~/.whispr/settings.json`. B
     "whisper_logging": false
   },
   "whisper": {
-    "model_name": "base.en",
+    "model_name": "large-v3-turbo",
     "language": "auto",
     "translate": false,
     "dictionary": ["USail", "CustomWord"]
@@ -147,7 +147,8 @@ The advanced configuration for Whispr is located in `~/.whispr/settings.json`. B
   - Memo: https://github.com/Mnpn/Azayaka/blob/main/Azayaka/Recording.swift, https://github.com/insidegui/AudioCap/blob/main/AudioCap/ProcessTap/CoreAudioUtils.swift
 - [ ] Application context awareness
   - We can use a small local model, feed it a OCR'ed version of the current active window, the cursor position and much more in a customizable prompt template to postprocess the transcription, allowing more expressive interaction.
-  - [ ] MLX-powered LLM post-processing
+- [x] MLX-powered LLM post-processing
+  - Implemented in this fork via Ollama (Metal-accelerated on Apple Silicon); see Post-Processing above
   - [ ] Apple Vision API integration
 - [ ] Add Windows support
 - [ ] Replacements
