@@ -27,7 +27,7 @@ jobs:
           npm run build
 
       - name: Build DMG
-        run: npx tauri build --release --bundles dmg
+        run: npx tauri build --bundles dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
