@@ -9,10 +9,10 @@
 # Usage:  scripts/build.sh
 set -euo pipefail
 
-source "$HOME/.cargo/env"
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 export CMAKE_POLICY_VERSION_MINIMUM=3.5
 
-IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep -oE '[0-9A-F]{40}' | head -1 || true)
+IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | grep -oE '[0-9A-F]{40}' | head -1 || true)
 if [ -n "${IDENTITY:-}" ]; then
   echo "Signing with identity: $IDENTITY"
   export APPLE_SIGNING_IDENTITY="$IDENTITY"

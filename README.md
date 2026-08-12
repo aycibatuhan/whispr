@@ -67,7 +67,7 @@ Whispr is highly configurable through its settings:
   - Removes filler words, fixes spelling/spacing/misheard words, adds punctuation
   - Fully local: nothing leaves your machine
   - Toggle in the tray menu: **Post-Processing → Enable Post-Processing**
-  - Pick any installed Ollama model from the tray menu (dynamic list)
+  - Pick any installed Ollama model from the tray menu (list is loaded at app launch)
   - Falls back to raw transcription if Ollama is unreachable or times out
   - Verified in 8 languages: English, Turkish, German, Spanish, French, Italian, Portuguese, Dutch
 
@@ -124,7 +124,7 @@ The advanced configuration for Whispr is located in `~/.whispr/settings.json`. B
   },
   "postprocess": {
     "enabled": true,
-    "model": "granite4:3b",
+    "model": "gemma4:e4b",
     "system_prompt": "You are a post-processor for speech-to-text output. Fix transcription errors: spelling, spacing, misheard words, missing punctuation. Remove filler words (um, uh, like, you know). Keep the original language and meaning. Return only the corrected text with no explanations, no quotes, no preamble.",
     "timeout_secs": 30
   },

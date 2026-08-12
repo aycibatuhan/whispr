@@ -130,7 +130,7 @@ impl Default for WhisprConfig {
             whisper: WhisperSettings::default(),
             postprocess: PostProcessSettings::default(),
             start_at_login: false,
-            keyboard_shortcut: "left_command_key".to_string(),
+            keyboard_shortcut: "right_command_key".to_string(),
             model: Model {
                 display_name: "Whisper Large v3 Turbo".to_string(),
                 url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin".to_string(),

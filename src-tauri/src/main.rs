@@ -27,7 +27,6 @@ use crate::{
     menu::{create_tray_menu, MenuState},
     whisper::WhisperProcessor,
 };
-
 const MIN_RECORDING_DURATION: Duration = Duration::from_secs(1);
 
 #[derive(thiserror::Error, Debug)]
@@ -182,13 +181,29 @@ fn setup_app(app: &mut App<Wry>) -> std::result::Result<(), Box<dyn std::error::
             if is_speaking {
                 // Try to acquire the semaphore permit
                 if let Ok(_permit) = state.recording_semaphore.try_acquire() {
+                    // Keep the permit held until the explicit add_permits(1)
+                    // on stop/failure paths; without forget() the RAII guard
+                    // would release it AND add_permits(1) would grow the pool.
+                    _permit.forget();
                     overlay.show();
                     let mut audio = state.audio.lock().unwrap();
                     // Lazily (re)create the audio manager in case no input device was
                     // available at startup (e.g. AirPods not connected yet).
                     if audio.is_none() {
                         match AudioManager::new() {
-                            Ok(am) => *audio = Some(am),
+                            Ok(mut am) => {
+                                // Apply the user's saved device/silence settings,
+                                // same as configure_audio does at startup.
+                                if let Ok(config) = ConfigManager::<WhisprConfig>::new("settings")
+                                    .and_then(|m| m.load_config("settings"))
+                                {
+                                    if let Some(device_name) = &config.audio.device_name {
+                                        let _ = am.set_input_device(device_name);
+                                    }
+                                    am.set_remove_silence(config.audio.remove_silence);
+                                }
+                                *audio = Some(am);
+                            }
                             Err(e) => {
                                 error!("No audio input device available: {}", e);
                                 overlay.hide();
@@ -261,7 +276,14 @@ fn setup_app(app: &mut App<Wry>) -> std::result::Result<(), Box<dyn std::error::
                             }
                             info!("Transcription: {}", transcription);
 
-                            // Optional local LLM post-processing via Ollama
+                            // Optional local LLM post-processing via Ollama.
+                            // Reload settings at dictation time so tray-menu
+                            // toggles take effect without an app restart.
+                            let postprocess_settings = ConfigManager::<WhisprConfig>::new("settings")
+                                .ok()
+                                .and_then(|m| m.load_config("settings").ok())
+                                .map(|c| c.postprocess)
+                                .unwrap_or_else(|| postprocess_settings.clone());
                             if postprocess_settings.enabled {
                                 let _ = app_handle_clone.emit("status-change", "Correcting");
                                 match crate::postprocess::correct(&transcription, &postprocess_settings) {

@@ -46,7 +46,9 @@ impl HotkeyManager {
         .cloned()
         .collect();
 
-        *key_map.get(shortcut).unwrap()
+        // Fall back to the default shortcut instead of panicking on an
+        // unrecognized value (e.g. a settings.json written by a newer fork).
+        key_map.get(shortcut).copied().unwrap_or((54, 1 << 20))
     }
 
     fn add_monitor(&mut self, monitor_selector: Sel) -> Result<()> {

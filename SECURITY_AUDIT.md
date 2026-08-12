@@ -1,7 +1,7 @@
-# Whispr Security Audit Report
+# Whispr Fork — Security Notes
 
-**Repo:** dbpprt/whispr (https://github.com/dbpprt/whispr)
-**Audited:** 2026-08-11, local clone at ~/whispr-local (includes our postprocess.rs addition)
+**Repo:** dbpprt/whispr (https://github.com/dbpprt/whispr) — fork with local LLM post-processing
+**Audited:** 2026-08-11, local clone (includes the postprocess.rs addition)
 **License:** MIT | **Author:** Dennis Bappert (dbpprt) | **Stars:** 29 | **History:** 31 commits, Dec 2024 – May 2026, active Dependabot
 
 ---
@@ -82,6 +82,6 @@
 
 **Reconciliation:** Both reviews agree there is no malicious behavior. The CAUTION items are privacy considerations for a voice app (transcripts on disk, optional WAV recordings), not security flaws. If you want stricter privacy: set `developer.logging: false` in `~/.whispr/settings.json` (or toggle Logging off in the tray menu) and keep `save_recordings` off.
 
-**Caveat (trust tier, not code):** Solo maintainer, 29 stars — COMMUNITY-UNVERIFIED by adoption. The code is clean, but as with any small open-source project, the supply-chain risk lives in the dependency tree (mitigated here by Dependabot + mainstream crates). For a menubar app with mic access, this is acceptable — and our build pins the exact Cargo.lock.
+**Caveat (trust tier, not code):** Solo maintainer, modest adoption — COMMUNITY-UNVERIFIED by adoption. The code is clean, but as with any small open-source project, the supply-chain risk lives in the dependency tree (mitigated here by Dependabot + mainstream crates). For a menubar app with mic access, this is acceptable — and this build pins the exact Cargo.lock.
 
 **Our addition note:** postprocess.rs talks only to `localhost:11434` (Ollama). No transcription data leaves the machine. If you ever switch to a remote Ollama host, that would change this assessment.

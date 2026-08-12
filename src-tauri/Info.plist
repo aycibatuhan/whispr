@@ -3,6 +3,6 @@
 <plist version="1.0">
   <dict>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Your reasons here.</string>
+    <string>Whispr uses the microphone for push-to-talk voice dictation.</string>
   </dict>
 </plist>
