@@ -73,22 +73,6 @@ Whispr is highly configurable through its settings:
 
 ## Getting Started
 
-### One-shot setup (recommended)
-
-On a fresh Mac, this installs Ollama, the correction model, the Whisper
-model, the app from the latest release, and writes the same settings used
-on the dev machine:
-
-```bash
-curl -sL https://raw.githubusercontent.com/aycibatuhan/whispr/main/scripts/setup.sh | bash
-```
-
-Then: first launch via right-click → Open (one-time Gatekeeper bypass),
-grant Microphone / Input Monitoring / Accessibility, and hold the hotkey
-(Right Control by default) to speak.
-
-### Manual setup
-
 1. Install [Ollama](https://ollama.com) and pull a correction model: `ollama pull gemma4:e4b-mlx`
 2. Download a multilingual Whisper model to `~/.whispr/model.bin`:
    ```bash
