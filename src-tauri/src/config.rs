@@ -6,6 +6,8 @@ use std::fs;
 use std::marker::PhantomData;
 use serde_json::Value;
 
+use crate::postprocess::PostProcessSettings;
+
 const BASE_PATH: &str = ".whispr";
 const SETTINGS_FILE: &str = "settings";
 
@@ -114,6 +116,7 @@ pub struct WhisprConfig {
     pub audio: AudioSettings,
     pub developer: DeveloperSettings,
     pub whisper: WhisperSettings,
+    pub postprocess: PostProcessSettings,
     pub start_at_login: bool,
     pub keyboard_shortcut: String,
     pub model: Model,
@@ -125,8 +128,9 @@ impl Default for WhisprConfig {
             audio: AudioSettings::default(),
             developer: DeveloperSettings::default(),
             whisper: WhisperSettings::default(),
+            postprocess: PostProcessSettings::default(),
             start_at_login: false,
-            keyboard_shortcut: "right_command_key".to_string(),
+            keyboard_shortcut: "left_command_key".to_string(),
             model: Model {
                 display_name: "Whisper Large v3 Turbo".to_string(),
                 url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin".to_string(),

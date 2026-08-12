@@ -62,13 +62,38 @@ Whispr is highly configurable through its settings:
   - Enable Whisper logging
   - Detailed configuration options
 
+- **Local LLM Post-Processing** (new)
+  - Optional correction of transcriptions by a local LLM via [Ollama](https://ollama.com)
+  - Removes filler words, fixes spelling/spacing/misheard words, adds punctuation
+  - Fully local: nothing leaves your machine
+  - Toggle in the tray menu: **Post-Processing → Enable Post-Processing**
+  - Pick any installed Ollama model from the tray menu (dynamic list)
+  - Falls back to raw transcription if Ollama is unreachable or times out
+  - Verified in 8 languages: English, Turkish, German, Spanish, French, Italian, Portuguese, Dutch
+
 ## Getting Started
 
-1. Download release
-2. Launch Whispr
-3. Configure settings (optional)
-4. Hold right ⌘ Command to speak
-5. Right click Whispr menubar to configure
+1. Install [Ollama](https://ollama.com) and pull a correction model: `ollama pull gemma4:e4b`
+2. Download a multilingual Whisper model to `~/.whispr/model.bin`:
+   ```bash
+   mkdir -p ~/.whispr && curl -L -o ~/.whispr/model.bin \
+     https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
+   ```
+3. Launch Whispr
+4. Right click the menubar icon → **Post-Processing → Enable Post-Processing**
+5. Hold right ⌘ Command (or your configured hotkey) to speak
+6. Release — the corrected text is inserted at your cursor
+
+## Building from source
+
+```bash
+npm install
+./scripts/build.sh          # auto-detects your Apple Development certificate
+open src-tauri/target/debug/bundle/macos/whispr.app
+```
+
+`scripts/build.sh` signs with your Apple Development certificate if present (keeps
+macOS permission grants across rebuilds) and falls back to adhoc signing otherwise.
 
 <div align="center">
   <img src="docs/assets/menubar.png" alt="Whispr Menubar Configuration" width="300">
@@ -96,6 +121,12 @@ The advanced configuration for Whispr is located in `~/.whispr/settings.json`. B
     "language": "auto",
     "translate": false,
     "dictionary": ["USail", "CustomWord"]
+  },
+  "postprocess": {
+    "enabled": true,
+    "model": "granite4:3b",
+    "system_prompt": "You are a post-processor for speech-to-text output. Fix transcription errors: spelling, spacing, misheard words, missing punctuation. Remove filler words (um, uh, like, you know). Keep the original language and meaning. Return only the corrected text with no explanations, no quotes, no preamble.",
+    "timeout_secs": 30
   },
   "start_at_login": false,
   "keyboard_shortcut": "right_command_key",

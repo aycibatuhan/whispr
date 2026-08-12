@@ -39,7 +39,8 @@ impl HotkeyManager {
             // Key mappings for different shortcuts
             ("right_option_key", (61, 1 << 19)), // Right Option key
             ("right_command_key", (54, 1 << 20)), // Right Command key
-            // Add more key mappings as needed
+            ("left_command_key", (55, 1 << 20)), // Left Command key (Windows key on PC keyboards)
+            ("right_control_key", (62, 1 << 18)), // Right Control key
         ]
         .iter()
         .cloned()

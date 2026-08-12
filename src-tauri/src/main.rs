@@ -7,6 +7,7 @@ mod audio;
 mod config;
 mod menu;
 mod whisper;
+mod postprocess;
 mod logging;
 
 use log::{error, warn, info, debug};
@@ -47,7 +48,7 @@ type Result<T> = std::result::Result<T, WhisprError>;
 
 struct AppState {
     whisper: WhisperProcessor,
-    audio: Mutex<AudioManager>,
+    audio: Mutex<Option<AudioManager>>,
     overlay: Mutex<OverlayWindow>,
     recording_semaphore: Arc<Semaphore>,
     recording_start: Mutex<Option<Instant>>,
@@ -55,8 +56,13 @@ struct AppState {
 
 impl AppState {
     fn new(config: WhisprConfig) -> Result<Self> {
-        let audio_manager = AudioManager::new()
-            .map_err(|e| WhisprError::ConfigError(e.to_string()))?;
+        let audio_manager = match AudioManager::new() {
+            Ok(am) => Some(am),
+            Err(e) => {
+                warn!("No audio input device available at startup ({}). Will retry on hotkey press.", e);
+                None
+            }
+        };
         
         let model_path = dirs::home_dir()
             .ok_or_else(|| WhisprError::SystemError("Could not find home directory".to_string()))?
@@ -76,11 +82,13 @@ impl AppState {
 
     fn configure_audio(&self, config: &WhisprConfig) -> Result<()> {
         let mut audio = self.audio.lock().unwrap();
-        if let Some(device_name) = &config.audio.device_name {
-            audio.set_input_device(device_name)
-                .map_err(|e| WhisprError::AudioError(e.to_string()))?;
+        if let Some(manager) = audio.as_mut() {
+            if let Some(device_name) = &config.audio.device_name {
+                manager.set_input_device(device_name)
+                    .map_err(|e| WhisprError::AudioError(e.to_string()))?;
+            }
+            manager.set_remove_silence(config.audio.remove_silence);
         }
-        audio.set_remove_silence(config.audio.remove_silence);
         Ok(())
     }
 }
@@ -116,16 +124,17 @@ fn setup_app(app: &mut App<Wry>) -> std::result::Result<(), Box<dyn std::error::
         WhisprConfig::default()
     };
 
-    // Set default audio device if none is configured
+    // Set default audio device if none is configured (tolerant: no mic = skip)
     if whispr_config.audio.device_name.is_none() {
-        let temp_audio = AudioManager::new()
-            .map_err(|e| WhisprError::AudioError(e.to_string()))?;
-        if let Some(first_device) = temp_audio.list_input_devices()
-            .map_err(|e| WhisprError::AudioError(e.to_string()))?
-            .first() {
-            whispr_config.audio.device_name = Some(first_device.clone());
-            config_manager.save_config(&whispr_config, "settings")
-                .map_err(|e| WhisprError::ConfigError(e.to_string()))?;
+        if let Ok(temp_audio) = AudioManager::new() {
+            if let Ok(devices) = temp_audio.list_input_devices() {
+                if let Some(first_device) = devices.first() {
+                    whispr_config.audio.device_name = Some(first_device.clone());
+                    if let Err(e) = config_manager.save_config(&whispr_config, "settings") {
+                        error!("Failed to save default audio device: {}", e);
+                    }
+                }
+            }
         }
     }
 
@@ -165,6 +174,7 @@ fn setup_app(app: &mut App<Wry>) -> std::result::Result<(), Box<dyn std::error::
 
     // Setup hotkey manager
     let app_handle_clone = app.handle().clone();
+    let postprocess_settings = whispr_config.postprocess.clone();
     let mut hotkey_manager = HotkeyManager::new(move |is_speaking| {
         if let Some(state) = app_handle_clone.try_state::<AppState>() {
             let overlay = state.overlay.lock().unwrap();
@@ -174,9 +184,26 @@ fn setup_app(app: &mut App<Wry>) -> std::result::Result<(), Box<dyn std::error::
                 if let Ok(_permit) = state.recording_semaphore.try_acquire() {
                     overlay.show();
                     let mut audio = state.audio.lock().unwrap();
-                    if let Err(e) = audio.start_capture() {
-                        error!("Failed to start audio capture: {}", e);
-                        return;
+                    // Lazily (re)create the audio manager in case no input device was
+                    // available at startup (e.g. AirPods not connected yet).
+                    if audio.is_none() {
+                        match AudioManager::new() {
+                            Ok(am) => *audio = Some(am),
+                            Err(e) => {
+                                error!("No audio input device available: {}", e);
+                                overlay.hide();
+                                state.recording_semaphore.add_permits(1);
+                                return;
+                            }
+                        }
+                    }
+                    if let Some(manager) = audio.as_mut() {
+                        if let Err(e) = manager.start_capture() {
+                            error!("Failed to start audio capture: {}", e);
+                            overlay.hide();
+                            state.recording_semaphore.add_permits(1);
+                            return;
+                        }
                     }
                     *state.recording_start.lock().unwrap() = Some(Instant::now());
                     let _ = app_handle_clone.emit("status-change", "Listening");
@@ -184,23 +211,33 @@ fn setup_app(app: &mut App<Wry>) -> std::result::Result<(), Box<dyn std::error::
                     warn!("Recording already in progress");
                 }
             } else {
-                let mut audio = state.audio.lock().unwrap();
-                audio.stop_capture();
-                
-                // Check recording duration
-                if let Some(start_time) = state.recording_start.lock().unwrap().take() {
-                    let duration = start_time.elapsed();
-                    if duration < MIN_RECORDING_DURATION {
-                        debug!("Recording too short ({:.2}s), discarding", duration.as_secs_f32());
-                        let _ = app_handle_clone.emit("status-change", "Ready");
-                        overlay.hide();
-                        return;
+                let captured_audio = {
+                    let mut audio = state.audio.lock().unwrap();
+                    let manager = match audio.as_mut() {
+                        Some(m) => m,
+                        None => {
+                            warn!("No audio manager (nothing was recording)");
+                            return;
+                        }
+                    };
+                    manager.stop_capture();
+                    
+                    // Check recording duration
+                    if let Some(start_time) = state.recording_start.lock().unwrap().take() {
+                        let duration = start_time.elapsed();
+                        if duration < MIN_RECORDING_DURATION {
+                            debug!("Recording too short ({:.2}s), discarding", duration.as_secs_f32());
+                            let _ = app_handle_clone.emit("status-change", "Ready");
+                            overlay.hide();
+                            return;
+                        }
                     }
-                }
+                    
+                    let _ = app_handle_clone.emit("status-change", "Transcribing");
+                    manager.get_captured_audio(16000, 1)
+                };
                 
-                let _ = app_handle_clone.emit("status-change", "Transcribing");
-                
-                if let Some(captured_audio) = audio.get_captured_audio(16000, 1) {
+                if let Some(captured_audio) = captured_audio {
                     debug!("Got captured audio: {} samples", captured_audio.len());
                     
                     match state.whisper.process_audio(captured_audio) {
@@ -223,6 +260,18 @@ fn setup_app(app: &mut App<Wry>) -> std::result::Result<(), Box<dyn std::error::
                                 }
                             }
                             info!("Transcription: {}", transcription);
+
+                            // Optional local LLM post-processing via Ollama
+                            if postprocess_settings.enabled {
+                                let _ = app_handle_clone.emit("status-change", "Correcting");
+                                match crate::postprocess::correct(&transcription, &postprocess_settings) {
+                                    Ok(corrected) => transcription = corrected,
+                                    Err(e) => {
+                                        error!("Post-processing failed, inserting raw transcription: {}", e);
+                                        let _ = app_handle_clone.emit("status-change", "Ready");
+                                    }
+                                }
+                            }
 
                             // Create a new Enigo instance for text input
                             let mut enigo = match Enigo::new(&Settings::default()) {

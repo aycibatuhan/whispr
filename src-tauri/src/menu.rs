@@ -2,7 +2,7 @@ use tauri::{
     AppHandle, Manager, Runtime,
     menu::{Menu, MenuItem, Submenu, CheckMenuItem, PredefinedMenuItem},
 };
-use log::{error, info, debug};
+use log::{error, info, debug, warn};
 use std::collections::HashMap;
 use crate::audio::AudioManager;
 use crate::config::{ConfigManager, WhisprConfig};
@@ -21,6 +21,8 @@ pub struct MenuState<R: Runtime> {
     pub whisper_logging_item: Option<CheckMenuItem<R>>,
     pub logging_item: Option<CheckMenuItem<R>>,
     pub keyboard_shortcut_items: HashMap<String, CheckMenuItem<R>>,
+    pub postprocess_enabled_item: Option<CheckMenuItem<R>>,
+    pub postprocess_model_items: HashMap<String, CheckMenuItem<R>>,
 }
 
 pub fn handle_menu_event<R: Runtime>(app: AppHandle<R>, id: &str, menu_state: &MenuState<R>) {
@@ -87,6 +89,8 @@ pub fn handle_menu_event<R: Runtime>(app: AppHandle<R>, id: &str, menu_state: &M
                 let shortcut = match id.strip_prefix("keyboard_shortcut_").unwrap() {
                     "right_option_key" => "right_option_key",
                     "right_command_key" => "right_command_key",
+                    "left_command_key" => "left_command_key",
+                    "right_control_key" => "right_control_key",
                     _ => {
                         error!("Unknown keyboard shortcut selected: {}", id);
                         return;
@@ -102,6 +106,16 @@ pub fn handle_menu_event<R: Runtime>(app: AppHandle<R>, id: &str, menu_state: &M
         }
         "restart" => {
             app.restart();
+        }
+        "postprocess_enabled" => {
+            if let Some(item) = &menu_state.postprocess_enabled_item {
+                handle_postprocess_selection(&app, item);
+            }
+        }
+        id if id.starts_with("postprocess_model_") => {
+            if let Some(model) = id.strip_prefix("postprocess_model_") {
+                handle_postprocess_model_selection(&app, model, &menu_state.postprocess_model_items);
+            }
         }
         _ => {
             error!("Unhandled menu item: {:?}", id);
@@ -125,18 +139,21 @@ pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> (Menu<R>, MenuState<R
 
     let mut audio_device_items = Vec::new();
     let mut audio_device_map = HashMap::new();
-    let audio_manager = AudioManager::new().unwrap();
     
-    if let Ok(devices) = audio_manager.list_input_devices() {
-        for device in devices {
-            let is_active = whispr_config.audio.device_name.as_ref().map_or(false, |d| d == &device);
-            let item_id = format!("audio_device_{}", device);
-            let item = CheckMenuItem::with_id(app, &item_id, &device, true, is_active, None::<String>).unwrap();
-            audio_device_items.push(item.clone());
-            audio_device_map.insert(device.to_string(), item);
+    if let Ok(audio_manager) = AudioManager::new() {
+        if let Ok(devices) = audio_manager.list_input_devices() {
+            for device in devices {
+                let is_active = whispr_config.audio.device_name.as_ref().map_or(false, |d| d == &device);
+                let item_id = format!("audio_device_{}", device);
+                let item = CheckMenuItem::with_id(app, &item_id, &device, true, is_active, None::<String>).unwrap();
+                audio_device_items.push(item.clone());
+                audio_device_map.insert(device.to_string(), item);
+            }
+        } else {
+            error!("Failed to get list of input devices");
         }
     } else {
-        error!("Failed to get list of input devices");
+        warn!("No audio input device available; audio device menu disabled");
     }
 
     let audio_device_refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = audio_device_items.iter()
@@ -247,8 +264,10 @@ pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> (Menu<R>, MenuState<R
     ).unwrap();
 
     let keyboard_shortcut_items = vec![
-        ("Right Option Key", whispr_config.keyboard_shortcut == "right_option_key"),
+        ("Left Command Key", whispr_config.keyboard_shortcut == "left_command_key"),
         ("Right Command Key", whispr_config.keyboard_shortcut == "right_command_key"),
+        ("Right Option Key", whispr_config.keyboard_shortcut == "right_option_key"),
+        ("Right Control Key", whispr_config.keyboard_shortcut == "right_control_key"),
     ];
 
     let mut keyboard_shortcut_check_items = HashMap::new();
@@ -268,6 +287,58 @@ pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> (Menu<R>, MenuState<R
         &keyboard_shortcut_menu_items
     ).unwrap();
 
+    let postprocess_enabled_item = CheckMenuItem::with_id(
+        app,
+        "postprocess_enabled",
+        "Enable Post-Processing",
+        true,
+        whispr_config.postprocess.enabled,
+        None::<String>
+    ).unwrap();
+
+    let mut postprocess_model_items = HashMap::new();
+    let mut postprocess_model_menu_items: Vec<&'static dyn tauri::menu::IsMenuItem<R>> = Vec::new();
+    let available_models = crate::postprocess::list_models();
+    let configured_model = whispr_config.postprocess.model.clone();
+
+    if available_models.is_empty() {
+        let no_models = MenuItem::with_id(
+            app,
+            "postprocess_no_models",
+            "Ollama not running (start it to see models)",
+            false,
+            None::<String>
+        ).unwrap();
+        postprocess_model_menu_items.push(Box::leak(Box::new(no_models)) as &'static dyn tauri::menu::IsMenuItem<R>);
+    } else {
+        for model in available_models {
+            let item_id = format!("postprocess_model_{}", model);
+            let item = CheckMenuItem::with_id(
+                app,
+                &item_id,
+                &model,
+                true,
+                model == configured_model,
+                None::<String>
+            ).unwrap();
+            postprocess_model_items.insert(item_id.clone(), item.clone());
+            postprocess_model_menu_items.push(Box::leak(Box::new(item)) as &'static dyn tauri::menu::IsMenuItem<R>);
+        }
+    }
+
+    let postprocess_submenu = Submenu::with_items(
+        app,
+        "Post-Processing",
+        true,
+        &[
+            &postprocess_enabled_item as &dyn tauri::menu::IsMenuItem<R>,
+            &PredefinedMenuItem::separator(app).unwrap() as &dyn tauri::menu::IsMenuItem<R>,
+        ]
+        .into_iter()
+        .chain(postprocess_model_menu_items.iter().map(|i| *i as &dyn tauri::menu::IsMenuItem<R>))
+        .collect::<Vec<_>>()
+    ).unwrap();
+
     let about = MenuItem::with_id(app, "about", "About", true, None::<String>).unwrap();
 
     let main_items: Vec<&dyn tauri::menu::IsMenuItem<R>> = vec![
@@ -280,6 +351,7 @@ pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> (Menu<R>, MenuState<R
         &language_submenu,
         &translate_item,
         &remove_silence_item,
+        &postprocess_submenu,
         &developer_options_separator,
         &developer_options_submenu,
         &about,
@@ -296,6 +368,8 @@ pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> (Menu<R>, MenuState<R
         whisper_logging_item: Some(whisper_logging_item),
         logging_item: Some(logging_item),
         keyboard_shortcut_items: keyboard_shortcut_check_items,
+        postprocess_enabled_item: Some(postprocess_enabled_item),
+        postprocess_model_items,
     };
     
     (menu, menu_state)
@@ -304,9 +378,16 @@ pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> (Menu<R>, MenuState<R
 fn handle_audio_device_selection<R: Runtime>(app: &AppHandle<R>, id: &str, audio_device_map: &HashMap<String, CheckMenuItem<R>>) {
     if let Some(app_state) = app.try_state::<crate::AppState>() {
         let mut audio_manager = app_state.audio.lock().unwrap();
-        if let Err(e) = audio_manager.set_input_device(id) {
+        let manager = match audio_manager.as_mut() {
+            Some(m) => m,
+            None => {
+                error!("No audio manager available");
+                return;
+            }
+        };
+        if let Err(e) = manager.set_input_device(id) {
             error!("Failed to set input device: {}", e);
-            if let Ok(current_device) = audio_manager.get_current_device_name() {
+            if let Ok(current_device) = manager.get_current_device_name() {
                 for (device_id, item) in audio_device_map {
                     item.set_checked(device_id == &current_device).unwrap();
                 }
@@ -332,11 +413,18 @@ fn handle_audio_device_selection<R: Runtime>(app: &AppHandle<R>, id: &str, audio
 fn handle_remove_silence_selection<R: Runtime>(app: &AppHandle<R>, remove_silence_item: &CheckMenuItem<R>) {
     if let Some(app_state) = app.try_state::<crate::AppState>() {
         let mut audio_manager = app_state.audio.lock().unwrap();
-        let current_state = audio_manager.is_silence_removal_enabled();
+        let manager = match audio_manager.as_mut() {
+            Some(m) => m,
+            None => {
+                error!("No audio manager available");
+                return;
+            }
+        };
+        let current_state = manager.is_silence_removal_enabled();
         let new_state = !current_state;
         
         debug!("Remove Silence before toggle: {}", current_state);
-        audio_manager.set_remove_silence(new_state);
+        manager.set_remove_silence(new_state);
         remove_silence_item.set_checked(new_state).unwrap();
         debug!("Remove Silence after toggle: {}", new_state);
 
@@ -585,4 +673,49 @@ fn handle_keyboard_shortcut_selection<R: Runtime>(app: &AppHandle<R>, _item: Che
                 }
             }
         });
+}
+
+fn handle_postprocess_selection<R: Runtime>(_app: &AppHandle<R>, postprocess_item: &CheckMenuItem<R>) {
+    let config_manager = ConfigManager::<WhisprConfig>::new("settings").expect("Failed to create config manager");
+    let mut whispr_config = WhisprConfig::default();
+
+    if config_manager.config_exists("settings") {
+        match config_manager.load_config("settings") {
+            Ok(config) => whispr_config = config,
+            Err(e) => error!("Failed to load configuration: {}", e),
+        }
+    }
+
+    let new_state = !whispr_config.postprocess.enabled;
+    postprocess_item.set_checked(new_state).unwrap();
+    whispr_config.postprocess.enabled = new_state;
+    if let Err(e) = config_manager.save_config(&whispr_config, "settings") {
+        error!("Failed to save configuration: {}", e);
+    }
+}
+
+fn handle_postprocess_model_selection<R: Runtime>(
+    _app: &AppHandle<R>,
+    model: &str,
+    model_items: &HashMap<String, CheckMenuItem<R>>,
+) {
+    let config_manager = ConfigManager::<WhisprConfig>::new("settings").expect("Failed to create config manager");
+    let mut whispr_config = WhisprConfig::default();
+
+    if config_manager.config_exists("settings") {
+        match config_manager.load_config("settings") {
+            Ok(config) => whispr_config = config,
+            Err(e) => error!("Failed to load configuration: {}", e),
+        }
+    }
+
+    whispr_config.postprocess.model = model.to_string();
+    if let Err(e) = config_manager.save_config(&whispr_config, "settings") {
+        error!("Failed to save configuration: {}", e);
+        return;
+    }
+
+    for (item_id, menu_item) in model_items {
+        menu_item.set_checked(item_id.strip_prefix("postprocess_model_").unwrap() == model).unwrap();
+    }
 }

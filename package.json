@@ -11,12 +11,12 @@
     "clippy": "cd src-tauri && cargo clippy"
   },
   "dependencies": {
+    "@tauri-apps/api": "2.2.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@tauri-apps/api": "^2.0.0-beta"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0-beta",
+    "@tauri-apps/cli": "2.2.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.0.3",

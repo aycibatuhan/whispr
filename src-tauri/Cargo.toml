@@ -37,6 +37,7 @@ tempfile = "3.15.0"  # For creating temporary files in tests
 dirs = "5.0.1"  # For accessing standard directories like home directory
 chrono = "0.4"
 whisper-rs = { version = "0.13.1", features = ["metal"] }
+ureq = { version = "2", features = ["json"] }
 fon = "0.6.0"
 samplerate = "0.2.4"
 tauri-plugin-autostart = "2.0.0"
