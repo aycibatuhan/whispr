@@ -29,10 +29,11 @@ impl Log for CombinedLogger {
                 record.file().unwrap_or("unknown"),
                 record.line().unwrap_or(0),
                 record.args()
-            ).unwrap();
-            file.flush().unwrap();
+            ).ok();
+            file.flush().ok();
 
-            // Write to console with colors
+            // Write to console with colors (best effort: stdout may be closed
+            // when launched from Finder or as a login item)
             let mut stdout = StandardStream::stdout(ColorChoice::Always);
             let color = match record.level() {
                 log::Level::Error => Color::Red,
@@ -43,8 +44,8 @@ impl Log for CombinedLogger {
             };
             
             let console_timestamp = Local::now().format("%H:%M:%S");
-            stdout.set_color(ColorSpec::new().set_fg(Some(color))).unwrap();
-            writeln!(
+            let _ = stdout.set_color(ColorSpec::new().set_fg(Some(color)));
+            let _ = writeln!(
                 stdout,
                 "[{} {} {}:{}] {}",
                 console_timestamp,
@@ -52,14 +53,15 @@ impl Log for CombinedLogger {
                 record.file().unwrap_or("unknown"),
                 record.line().unwrap_or(0),
                 record.args()
-            ).unwrap();
-            stdout.reset().unwrap();
+            );
+            let _ = stdout.reset();
         }
     }
 
     fn flush(&self) {
-        let mut file = self.file.lock().unwrap();
-        file.flush().unwrap();
+        if let Ok(mut file) = self.file.lock() {
+            let _ = file.flush();
+        }
     }
 }
 

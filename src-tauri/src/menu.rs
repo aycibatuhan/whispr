@@ -140,25 +140,35 @@ pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> (Menu<R>, MenuState<R
     let mut audio_device_items = Vec::new();
     let mut audio_device_map = HashMap::new();
     
-    if let Ok(audio_manager) = AudioManager::new() {
-        if let Ok(devices) = audio_manager.list_input_devices() {
-            for device in devices {
-                let is_active = whispr_config.audio.device_name.as_ref().map_or(false, |d| d == &device);
-                let item_id = format!("audio_device_{}", device);
-                let item = CheckMenuItem::with_id(app, &item_id, &device, true, is_active, None::<String>).unwrap();
-                audio_device_items.push(item.clone());
-                audio_device_map.insert(device.to_string(), item);
-            }
-        } else {
-            error!("Failed to get list of input devices");
-        }
-    } else {
-        warn!("No audio input device available; audio device menu disabled");
+    let devices = AudioManager::new().list_input_devices();
+    for device in devices {
+        let is_active = whispr_config.audio.device_name.as_ref().map_or(false, |d| d == &device);
+        let item_id = format!("audio_device_{}", device);
+        let item = CheckMenuItem::with_id(app, &item_id, &device, true, is_active, None::<String>).unwrap();
+        audio_device_items.push(item.clone());
+        audio_device_map.insert(device.to_string(), item);
     }
 
-    let audio_device_refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = audio_device_items.iter()
+    let mut audio_device_refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = audio_device_items.iter()
         .map(|item| item as &dyn tauri::menu::IsMenuItem<R>)
         .collect();
+
+    // Devices are listed once at launch. If none is connected yet (e.g. a
+    // Mac mini whose only mic is a Bluetooth headset) say so instead of
+    // showing an empty submenu; capture still picks up a mic that connects
+    // later, it just won't appear here until the next launch.
+    let no_devices_item;
+    if audio_device_refs.is_empty() {
+        warn!("No microphone connected; audio device menu shows a placeholder");
+        no_devices_item = MenuItem::with_id(
+            app,
+            "audio_device_none",
+            "No microphone connected (restart to refresh)",
+            false,
+            None::<String>
+        ).unwrap();
+        audio_device_refs.push(&no_devices_item as &dyn tauri::menu::IsMenuItem<R>);
+    }
 
     let audio_submenu = Submenu::with_items(
         app,
@@ -377,20 +387,12 @@ pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> (Menu<R>, MenuState<R
 
 fn handle_audio_device_selection<R: Runtime>(app: &AppHandle<R>, id: &str, audio_device_map: &HashMap<String, CheckMenuItem<R>>) {
     if let Some(app_state) = app.try_state::<crate::AppState>() {
-        let mut audio_manager = app_state.audio.lock().unwrap();
-        let manager = match audio_manager.as_mut() {
-            Some(m) => m,
-            None => {
-                error!("No audio manager available");
-                return;
-            }
-        };
+        let mut manager = app_state.audio.lock().unwrap_or_else(|p| p.into_inner());
         if let Err(e) = manager.set_input_device(id) {
             error!("Failed to set input device: {}", e);
-            if let Ok(current_device) = manager.get_current_device_name() {
-                for (device_id, item) in audio_device_map {
-                    item.set_checked(device_id == &current_device).unwrap();
-                }
+            let current_device = manager.get_current_device_name();
+            for (device_id, item) in audio_device_map {
+                let _ = item.set_checked(current_device.as_deref() == Some(device_id.as_str()));
             }
         } else {
             for (device_id, item) in audio_device_map {
@@ -412,14 +414,7 @@ fn handle_audio_device_selection<R: Runtime>(app: &AppHandle<R>, id: &str, audio
 
 fn handle_remove_silence_selection<R: Runtime>(app: &AppHandle<R>, remove_silence_item: &CheckMenuItem<R>) {
     if let Some(app_state) = app.try_state::<crate::AppState>() {
-        let mut audio_manager = app_state.audio.lock().unwrap();
-        let manager = match audio_manager.as_mut() {
-            Some(m) => m,
-            None => {
-                error!("No audio manager available");
-                return;
-            }
-        };
+        let mut manager = app_state.audio.lock().unwrap_or_else(|p| p.into_inner());
         let current_state = manager.is_silence_removal_enabled();
         let new_state = !current_state;
         

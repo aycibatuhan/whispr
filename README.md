@@ -35,13 +35,37 @@ Whispr is a macOS menubar application written in Rust for local voice-to-text tr
      <img src="docs/assets/menubar.png" alt="Whispr Menubar Configuration" width="300">
    </div>
 
+## Troubleshooting
+
+- **The hotkey stops responding after a while.** Fixed in the current version: any
+  dictation that ended in an error (no speech detected, Ollama down, permission
+  missing, …) used to leave the app permanently "busy". Every path now releases
+  the hotkey. If you still see it, check `~/.whispr/logs/` and open an issue.
+- **"No microphone connected" overlay.** Your Mac has no usable input device right
+  now. On a Mac mini this typically means the AirPods (or another headset) are not
+  connected. Connect them and press the hotkey again; no restart is needed. The
+  device is looked up fresh on every press, so a headset that disconnects and
+  reconnects keeps working.
+- **The Audio Device menu is empty.** The list is built at launch. A microphone that
+  connects later is still used automatically; it just won't show in the menu until
+  the next launch.
+- **Nothing is typed although the log shows a transcription.** macOS Accessibility
+  permission is missing or was reset by a rebuild with a different signature.
+  Re-add Whispr under System Settings → Privacy & Security → Accessibility.
+  `scripts/build.sh` signs with your Apple Development certificate when one is
+  present so grants survive rebuilds.
+- **First correction is slow.** Ollama loads the model on first use. Whispr now asks
+  Ollama to load it as soon as you press the hotkey, so it is usually ready by the
+  time Whisper finishes. Keep `timeout_secs` generous for large models.
+- **Logs.** `~/.whispr/logs/whispr_YYYYMMDD.log` (Developer Options → Logging).
+
 ## Known Issues
 
 - Startup experience is pretty rough, downloading the model and granting permissions.
 - Silence removal is not tweaked yet and it is static, ideally it should be dynamic.
 - Sometimes when right-clicking the menu bar icon, the menu doesn't open but flickers.
 - Manually downloading the model is painful.
-- The overlay lags when Whisper runs.
+- The Audio Device menu only refreshes at launch.
 
 ## ⚙️ Configuration
 

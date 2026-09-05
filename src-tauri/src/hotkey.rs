@@ -18,6 +18,12 @@ pub struct HotkeyManager {
     key_mask: NSUInteger,
 }
 
+// The stored pointers are opaque NSEvent monitor handles that are never
+// dereferenced; they only exist so the monitors could be removed later.
+// Holding them from Tauri's managed state (any thread) is therefore safe.
+unsafe impl Send for HotkeyManager {}
+unsafe impl Sync for HotkeyManager {}
+
 impl HotkeyManager {
     pub fn new<F>(callback: F, config: WhisprConfig) -> Self 
     where
@@ -56,7 +62,14 @@ impl HotkeyManager {
         let key_code = self.key_code;
         let key_mask = self.key_mask;
         let monitor: id = unsafe {
-            let handler = block::ConcreteBlock::new(move |event: id| {
+            // The same block serves both monitors. A *local* monitor handler
+            // must return the NSEvent to pass on (or nil to swallow it); a
+            // *global* one returns void and AppKit ignores the register. The
+            // upstream code returned nothing, so whenever Whispr happened to
+            // be the active app (e.g. right after launch) AppKit read garbage
+            // as an event pointer and crashed in objc_msgSend. Always return
+            // the event so the key still reaches the app normally.
+            let handler = block::ConcreteBlock::new(move |event: id| -> id {
                 if !event.is_null() {
                     let event_key_code: u16 = msg_send![event, keyCode];
                     if event_key_code == key_code {
@@ -66,6 +79,7 @@ impl HotkeyManager {
                         callback(is_pressed);
                     }
                 }
+                event
             })
             .copy();
             

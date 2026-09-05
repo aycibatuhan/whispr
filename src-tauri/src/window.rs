@@ -54,7 +54,14 @@ impl OverlayWindow {
 
     pub fn move_bottom_right(&self, margin: i32) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(window) = &self.window {
-            let screen = window.current_monitor()?.unwrap();
+            // A hidden window may not report a current monitor; fall back to
+            // the primary one instead of panicking inside the hotkey handler.
+            let screen = match window.current_monitor()? {
+                Some(m) => m,
+                None => window
+                    .primary_monitor()?
+                    .ok_or("no monitor available to position the overlay")?,
+            };
             let screen_position = screen.position();
             let screen_size = screen.size();
             let window_size = window.outer_size()?;

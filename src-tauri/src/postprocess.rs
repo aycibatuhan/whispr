@@ -72,6 +72,25 @@ pub fn correct(transcription: &str, settings: &PostProcessSettings) -> Result<St
     Ok(corrected)
 }
 
+/// Ask Ollama to load `model` into memory without generating anything.
+/// Called in the background when a recording starts so that a cold model is
+/// (usually) already resident by the time transcription finishes. Failures
+/// are logged and otherwise ignored; `correct` will retry for real.
+pub fn warm_up(model: &str) {
+    let body = serde_json::json!({
+        "model": model,
+        "prompt": "",
+        "keep_alive": "10m"
+    });
+    match ureq::post("http://localhost:11434/api/generate")
+        .timeout(Duration::from_secs(120))
+        .send_json(body)
+    {
+        Ok(_) => info!("Ollama model '{}' is warm", model),
+        Err(e) => warn!("Ollama warm-up for '{}' failed: {}", model, e),
+    }
+}
+
 pub fn list_models() -> Vec<String> {
     let resp = match ureq::get("http://localhost:11434/api/tags")
         .timeout(Duration::from_secs(3))
